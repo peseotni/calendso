@@ -50,9 +50,11 @@ export default function BookDetail() {
   const collections = useQuery({ queryKey: ["collections"], queryFn: api.collections });
   const feeds = useQuery({ queryKey: ["feeds"], queryFn: api.feeds });
 
+  // Initialise the form when the editor opens; later refetches (e.g. saved
+  // listening progress) must not overwrite what the user is typing.
   useEffect(() => {
     if (book && editing) setDraft(Object.fromEntries(META_KEYS.map((k) => [k, book[k]])) as MetadataValue);
-  }, [book, editing]);
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = (updated?: Book) => {
     if (updated) queryClient.setQueryData(["book", bookId], updated);

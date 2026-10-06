@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import samples
@@ -83,3 +85,81 @@ def test_unknown_and_broken_files(tmp_path):
     broken.write_bytes(b"not a zip")
     with pytest.raises(IngestError):
         parse_book(broken, "epub")
+
+
+def _tessdata_available() -> bool:
+    try:
+        import pymupdf
+
+        return bool(pymupdf.get_tessdata())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@pytest.mark.skipif(not _tessdata_available(), reason="Tesseract language data not installed")
+def test_scanned_pdf_is_ocrd(tmp_path):
+    import io
+
+    import pymupdf
+    from PIL import Image, ImageDraw, ImageFont
+
+    pages = [
+        ("Chapter One", "The storm arrived an hour before midnight. Mara kept the lamp burning all night long."),
+        ("Chapter Two", "At dawn the ship turned toward the harbor and the keeper finally went to sleep."),
+    ]
+    doc = pymupdf.open()
+    for title, body in pages:
+        image = Image.new("RGB", (1240, 1754), "white")  # A4 at 150 dpi
+        draw = ImageDraw.Draw(image)
+        try:
+            heading = ImageFont.truetype("DejaVuSerif-Bold.ttf", 64)
+            font = ImageFont.truetype("DejaVuSerif.ttf", 36)
+        except OSError:
+            heading = font = ImageFont.load_default(size=40)
+        draw.text((120, 200), title, font=heading, fill="black")
+        words, line, y = body.split(), "", 340
+        for word in words:
+            if draw.textlength(f"{line} {word}", font=font) > 1000:
+                draw.text((120, y), line, font=font, fill="black")
+                line, y = word, y + 56
+            else:
+                line = f"{line} {word}".strip()
+        draw.text((120, y), line, font=font, fill="black")
+        buffer = io.BytesIO()
+        image.save(buffer, "PNG")
+        page = doc.new_page(width=595, height=842)
+        page.insert_image(page.rect, stream=buffer.getvalue())
+    path = tmp_path / "scan.pdf"
+    doc.save(path)
+
+    book = parse_book(path, "pdf", options={"ocr": "auto"})
+    text = " ".join(c.text for c in book.chapters).lower()
+    assert "storm arrived" in text and "harbor" in text
+    assert any("OCR" in w for w in book.warnings)
+
+    with pytest.raises(IngestError):
+        parse_book(path, "pdf", options={"ocr": "off"})
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.mark.parametrize("name", ["lighthouse.mobi", "lighthouse.azw3"])
+def test_kindle_books(name):
+    """Kindle files made from the sample EPUB with Calibre (old MOBI and KF8)."""
+    book = parse_book(FIXTURES / name, detect_format(name))
+    assert book.title == samples.TITLE and book.authors == [samples.AUTHOR]
+    assert book.isbn == "9780000000002"
+    assert book.cover and book.cover[:2] == b"\xff\xd8"
+    assert _included_titles(book) == EXPECTED_TITLES  # Calibre's inline TOC page is dropped
+    assert "The storm arrived an hour before midnight" in book.chapters[1].text
+
+
+def test_drm_kindle_is_rejected(tmp_path):
+    data = bytearray((FIXTURES / "lighthouse.mobi").read_bytes())
+    record0 = int.from_bytes(data[78:82], "big")
+    data[record0 + 12 : record0 + 14] = (2).to_bytes(2, "big")  # encryption type: Mobipocket DRM
+    path = tmp_path / "locked.azw"
+    path.write_bytes(bytes(data))
+    with pytest.raises(IngestError, match="DRM"):
+        parse_book(path, "mobi")

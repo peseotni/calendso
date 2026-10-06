@@ -72,17 +72,47 @@ def parse_mobi(path: Path, progress: ProgressFn | None = None) -> ParsedBook:
 
 
 def _apply_opf_metadata(folder: Path, book: ParsedBook) -> None:
-    for opf in folder.glob("*.opf"):
+    """KindleUnpack writes an OPF next to the old-style MOBI HTML: use its
+    metadata and cover image."""
+    from urllib.parse import unquote
+
+    from .epub import _parse_metadata
+
+    for opf_path in folder.glob("*.opf"):
         try:
-            root = etree.parse(str(opf), etree.XMLParser(resolve_entities=False, no_network=True, recover=True)).getroot()
+            root = etree.parse(str(opf_path), etree.XMLParser(resolve_entities=False, no_network=True, recover=True)).getroot()
         except (OSError, etree.XMLSyntaxError):
             continue
-        title = root.findtext(".//{http://purl.org/dc/elements/1.1/}title")
-        creator = root.findtext(".//{http://purl.org/dc/elements/1.1/}creator")
-        if title:
-            book.title = clean_inline(title)
-        if creator:
-            book.authors = [clean_inline(creator)]
+        if root is None:
+            continue
+        meta = ParsedBook()
+        _parse_metadata(root, meta)
+        for field in ("title", "subtitle", "language", "publisher", "year", "description", "isbn", "series", "series_index"):
+            value = getattr(meta, field)
+            if value:
+                setattr(book, field, value)
+        if meta.authors:
+            book.authors = meta.authors
+        if meta.subjects:
+            book.subjects = meta.subjects
+
+        items = {item.get("id"): item for item in root.iter("{*}item")}
+        cover_href = None
+        for element in root.iter("{*}meta"):
+            if element.get("name") == "cover" and element.get("content") in items:
+                cover_href = items[element.get("content")].get("href")
+        if not cover_href:
+            cover_href = next(
+                (i.get("href") for i in items.values()
+                 if (i.get("media-type") or "").startswith("image/") and "cover" in ((i.get("id") or "") + (i.get("href") or "")).lower()),
+                None,
+            )
+        candidates = [folder / unquote(cover_href)] if cover_href else []
+        candidates += sorted(folder.glob("Images/cover*")) + sorted(folder.glob("images/cover*"))
+        for candidate in candidates:
+            if candidate.is_file() and candidate.stat().st_size > 1000:
+                book.cover = candidate.read_bytes()
+                break
         break
 
 

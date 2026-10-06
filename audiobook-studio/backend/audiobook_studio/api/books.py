@@ -131,6 +131,11 @@ def get_book(book_id: int, session: Session = Depends(get_db)):
     return book_out(get_or_404(session, Book, book_id, "Book"))
 
 
+def _manages_files(book: Book) -> bool:
+    """Studio-made books are always kept in sync; imported ones only on request."""
+    return bool(book.files) and (book.source != "import" or settings_store.current().manage_imported_files)
+
+
 def _apply_changes(session: Session, book: Book, changes: dict) -> bool:
     """Apply metadata changes; returns True when tags/paths must be rewritten."""
     retag = False
@@ -156,7 +161,7 @@ def update_book(book_id: int, body: BookUpdate, session: Session = Depends(get_d
     changes = body.model_dump(exclude_unset=True)
     retag = _apply_changes(session, book, changes)
     session.commit()
-    if retag and book.files:
+    if retag and _manages_files(book):
         move = bool(PATH_FIELDS & set(changes))
         runner.enqueue(session, "retag", f"Update tags of “{book.title}”", {"move": move}, book_id=book.id)
     session.refresh(book)
@@ -180,7 +185,7 @@ def bulk_update(body: BulkBookUpdate, session: Session = Depends(get_db)):
     session.commit()
     move = bool(PATH_FIELDS & set(allowed))
     for book in to_retag:
-        if book.files:
+        if _manages_files(book):
             runner.enqueue(session, "retag", f"Update tags of “{book.title}”", {"move": move}, book_id=book.id)
     return {"updated": len(books), "retagging": len(to_retag)}
 
@@ -235,7 +240,7 @@ def _store_book_cover(session: Session, book: Book, data: bytes) -> None:
         raise HTTPException(400, str(exc)) from exc
     book.updated_at = utcnow()
     session.commit()
-    if book.files:
+    if _manages_files(book):
         runner.enqueue(session, "retag", f"Update cover of “{book.title}”", {"move": False}, book_id=book.id)
 
 

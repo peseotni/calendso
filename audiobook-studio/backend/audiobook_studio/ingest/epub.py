@@ -356,7 +356,7 @@ def parse_epub(path: Path, progress: ProgressFn | None = None) -> ParsedBook:
     for n, item in enumerate(spine):
         data = z.read(item.href) or b""
         root = parse_html_document(data)
-        docs.append(extract_blocks(root))
+        docs.append([b for b in extract_blocks(root) if b.level >= 0])
         doc_titles.append(document_title(root))
         if progress:
             progress(0.1 + 0.8 * (n + 1) / len(spine), f"Reading section {n + 1} of {len(spine)}")
@@ -372,12 +372,29 @@ def parse_epub(path: Path, progress: ProgressFn | None = None) -> ParsedBook:
     return book
 
 
+CONTENTS_TITLES = {"contents", "table of contents", "inhalt", "inhaltsverzeichnis", "sommaire", "table des matieres",
+                   "indice", "contenido", "inhoud", "spis tresci"}
+
+
+def _is_toc_doc(blocks: list[Block], doc_title: str, toc_titles: set[str]) -> bool:
+    """An (often generated) table-of-contents page: a heading plus chapter titles."""
+    texts = [normalize_title(b.text) for b in blocks]
+    if not texts:
+        return False
+    titled = texts[0] in CONTENTS_TITLES or normalize_title(doc_title) in CONTENTS_TITLES
+    entries = texts[1:] if texts[0] in CONTENTS_TITLES else texts
+    matches = sum(1 for t in entries if t in toc_titles)
+    return bool(entries) and matches >= 2 and matches >= 0.7 * len(entries) and (titled or matches == len(entries))
+
+
 def _build_chapters(
     spine: list[ManifestItem],
     docs: list[list[Block]],
     doc_titles: list[str],
     toc: list[TocEntry],
 ) -> list[ParsedChapter]:
+    toc_titles = {normalize_title(e.title) for e in toc}
+    docs = [[] if _is_toc_doc(blocks, title, toc_titles) else blocks for blocks, title in zip(docs, doc_titles)]
     doc_index = {item.href: i for i, item in enumerate(spine)}
     doc_index_lower = {item.href.lower(): i for i, item in enumerate(spine)}
 

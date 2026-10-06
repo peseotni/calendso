@@ -254,6 +254,7 @@ export interface AppSettings {
   library_template: string;
   auto_organize: boolean;
   write_sidecars: boolean;
+  manage_imported_files: boolean;
   keep_workspace_audio: boolean;
   inbox_enabled: boolean;
   inbox_auto_render: boolean;

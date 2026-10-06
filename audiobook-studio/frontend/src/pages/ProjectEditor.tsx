@@ -92,7 +92,9 @@ function VoiceTab({ project, onSaved }: { project: ProjectDetail; onSaved: (p: P
   const feedback = useFeedback();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<RenderSettings>(project.settings);
-  useEffect(() => setDraft(project.settings), [project.settings]);
+  const savedSettings = JSON.stringify(project.settings);
+  // Re-sync only when the saved settings really changed (not on every refetch).
+  useEffect(() => setDraft(JSON.parse(savedSettings) as RenderSettings), [savedSettings]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(project.settings);
   const save = useMutation({
     mutationFn: () => api.updateProject(project.id, { settings: draft }),
@@ -133,7 +135,8 @@ function DetailsTab({ project, onSaved }: { project: ProjectDetail; onSaved: (p?
   const initial = Object.fromEntries(META_KEYS.map((k) => [k, (project as unknown as Metadata)[k]])) as MetadataValue;
   const [draft, setDraft] = useState<MetadataValue>(initial);
   const [lookup, setLookup] = useState(false);
-  useEffect(() => setDraft(initial), [project.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
+  const savedMetadata = JSON.stringify(initial);
+  useEffect(() => setDraft(JSON.parse(savedMetadata) as MetadataValue), [savedMetadata]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const save = useMutation({
     mutationFn: () => api.updateProject(project.id, draft),

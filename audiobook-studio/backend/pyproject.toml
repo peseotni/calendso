@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "audiobook-studio"
 version = "1.0.0"
 description = "Self-hosted audiobook creation suite: turn ebooks and PDFs into chaptered audiobooks and organize your library."
-readme = "../README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 dependencies = [

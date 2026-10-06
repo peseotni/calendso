@@ -8,7 +8,17 @@ from pathlib import Path
 
 from lxml import etree, html as lxml_html
 
-from .base import ParsedBook, Para, chapters_from_paras, clean_inline, guess_language, normalize_language
+from .base import (
+    ParsedBook,
+    ParsedChapter,
+    Para,
+    chapters_from_paras,
+    clean_inline,
+    count_words,
+    guess_language,
+    looks_like_front_matter,
+    normalize_language,
+)
 
 BLOCK_TAGS = {
     "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "section",
@@ -25,6 +35,9 @@ SKIP_TAGS = {
 _NOTE_TYPES = ("footnote", "endnote", "rearnote", "noteref", "pagebreak", "footnotes", "endnotes")
 _NOTE_ROLES = ("doc-footnote", "doc-endnote", "doc-noteref", "doc-pagebreak", "doc-endnotes")
 _NOTE_MARK_RE = re.compile(r"^\s*[\[(]?(?:\d{1,3}|[ivxlc]{1,5}|[*†‡§¶#]+|[a-z])[\])]?\s*$", re.IGNORECASE)
+
+
+PAGEBREAK = "\f"
 
 
 @dataclass
@@ -98,6 +111,14 @@ class _Extractor:
                 self.buf.append(el.tail)
             return
         if _skip_element(el, tag):
+            if el.tail:
+                self.buf.append(el.tail)
+            return
+
+        if tag in ("mbp:pagebreak", "pagebreak") or (tag == "div" and "mbp_pagebreak" in (el.get("class") or "")):
+            # Kindle (MOBI) page breaks separate chapters.
+            self.flush()
+            self.blocks.append(Block(text=PAGEBREAK, level=-1))
             if el.tail:
                 self.buf.append(el.tail)
             return
@@ -201,11 +222,37 @@ def parse_html_file(path: Path) -> ParsedBook:
             book.subjects = [k.strip() for k in content.split(",") if k.strip()][:10]
     book.language = normalize_language(root.get("lang") or "")
 
-    paras = [Para(text=b.text, level=b.level) for b in blocks]
-    # A single <h1> at the very start is the document title, not a chapter.
-    if sum(1 for p in paras if p.level == 1) == 1 and paras and paras[0].level == 1:
-        paras = paras[1:]
-    book.chapters = chapters_from_paras(paras, fallback_title="Part")
+    if sum(1 for b in blocks if b.level < 0) >= 2:
+        book.chapters = chapters_from_pagebreaks(blocks)
+    else:
+        paras = [Para(text=b.text, level=b.level) for b in blocks if b.level >= 0]
+        # A single <h1> at the very start is the document title, not a chapter.
+        if sum(1 for p in paras if p.level == 1) == 1 and paras and paras[0].level == 1:
+            paras = paras[1:]
+        book.chapters = chapters_from_paras(paras, fallback_title="Part")
     if not book.language:
-        book.language = guess_language(" ".join(p.text for p in paras[:300]))
+        book.language = guess_language(" ".join(b.text for b in blocks[:300] if b.level >= 0))
     return book
+
+
+def chapters_from_pagebreaks(blocks: list[Block]) -> list[ParsedChapter]:
+    """Kindle books mark chapters with page breaks; the first line is the title."""
+    segments: list[list[Block]] = [[]]
+    for block in blocks:
+        if block.level < 0:
+            if segments[-1]:
+                segments.append([])
+        else:
+            segments[-1].append(block)
+    chapters: list[ParsedChapter] = []
+    for segment in (s for s in segments if s):
+        first = segment[0].text.strip()
+        short = count_words(first) <= 15 and len(first) <= 120 and first[-1:] not in ".!?…,;"
+        title = first if short else f"Section {len(chapters) + 1}"
+        text = "\n\n".join(b.text for b in segment)
+        chapter = ParsedChapter(title=title[:200], text=text)
+        if looks_like_front_matter(title, text):
+            chapter.include = False
+            chapter.kind = "front" if not chapters else chapter.kind
+        chapters.append(chapter)
+    return chapters

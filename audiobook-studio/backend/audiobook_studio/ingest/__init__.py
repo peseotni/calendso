@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import IngestError, ParsedBook, ParsedChapter, ProgressFn, clean_inline, count_words
+from .base import IngestError, ParsedBook, ParsedChapter, ProgressFn, clean_inline, count_words, normalize_title
 
 FORMATS: dict[str, str] = {
     ".epub": "epub",
@@ -96,12 +96,28 @@ def parse_book(
     return finalize(book)
 
 
+_CONTENTS = {"contents", "table of contents", "inhalt", "inhaltsverzeichnis", "sommaire", "indice", "contenido"}
+
+
+def _is_toc_remnant(index: int, chapter: ParsedChapter, titles: list[str]) -> bool:
+    """A chapter that only lists other chapters' titles (an inline table of contents)."""
+    paragraphs = [normalize_title(p) for p in chapter.text.split("\n\n") if p.strip()]
+    paragraphs = [p for p in paragraphs if p not in _CONTENTS]
+    if not paragraphs or count_words(chapter.text) > 300:
+        return False
+    others = {t for i, t in enumerate(titles) if i != index and t}
+    return sum(1 for p in paragraphs if p in others) >= max(1, round(len(paragraphs) * 0.8))
+
+
 def finalize(book: ParsedBook) -> ParsedBook:
-    """Normalise parser output: trim titles, drop empty chapters."""
+    """Normalise parser output: trim titles, drop empty chapters and TOC remnants."""
+    titles = [normalize_title(c.title) for c in book.chapters]
     chapters: list[ParsedChapter] = []
-    for chapter in book.chapters:
+    for index, chapter in enumerate(book.chapters):
         text = chapter.text.strip()
         if not text or count_words(text) == 0:
+            continue
+        if _is_toc_remnant(index, chapter, titles):
             continue
         title = clean_inline(chapter.title).replace("\n", " ")[:200] or f"Chapter {len(chapters) + 1}"
         chapters.append(ParsedChapter(title=title, text=text, kind=chapter.kind, include=chapter.include))

@@ -70,6 +70,8 @@ class AppSettings(BaseModel):
     library_template: str = "{author}/[{series}/][{series_index} - ]{title}"
     auto_organize: bool = True
     write_sidecars: bool = True
+    # Imported audiobooks are left untouched on disk unless this is enabled.
+    manage_imported_files: bool = False
     keep_workspace_audio: bool = True
 
     # Watch folder

@@ -305,6 +305,12 @@ export default function SettingsPage() {
           <Switch checked={draft.auto_organize} onChange={(auto_organize) => set({ auto_organize })} label="Move files when metadata changes" description="Editing author, title or series renames the folder." />
           <Switch checked={draft.write_sidecars} onChange={(write_sidecars) => set({ write_sidecars })} label="Write sidecar files" description="cover.jpg, desc.txt, reader.txt and metadata.json next to the audio for other apps." />
           <Switch
+            checked={draft.manage_imported_files}
+            onChange={(manage_imported_files) => set({ manage_imported_files })}
+            label="Manage imported audiobooks too"
+            description="Also re-tag and move files of imported audiobooks when you edit them. Off: edits stay in the library database."
+          />
+          <Switch
             checked={draft.keep_workspace_audio}
             onChange={(keep_workspace_audio) => set({ keep_workspace_audio })}
             label="Keep rendered chapters after narration"

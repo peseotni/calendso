@@ -228,6 +228,21 @@ def test_scan_imports_existing_audiobooks(client, run_jobs, data_dir):
     run_jobs()
     assert len([b for b in client.get("/api/books").json() if b["title"] == "Old Recording"]) == 1
 
+    # editing an imported book leaves its files alone unless explicitly enabled
+    book = imported[0]
+    first_file = data_dir / "library" / book["files"][0]["path"]
+    before = first_file.stat().st_mtime_ns
+    client.patch(f"/api/books/{book['id']}", json={"author": "J. Doe", "genre": "Drama"})
+    assert run_jobs() == 0
+    assert first_file.stat().st_mtime_ns == before
+    assert client.get(f"/api/books/{book['id']}").json()["author"] == "J. Doe"
+    client.patch("/api/settings", json={"manage_imported_files": True})
+    client.patch(f"/api/books/{book['id']}", json={"genre": "Radio Drama"})
+    assert run_jobs() == 1
+    moved = client.get(f"/api/books/{book['id']}").json()
+    assert moved["path"].startswith("J. Doe/")
+    client.patch("/api/settings", json={"manage_imported_files": False})
+
 
 def test_lexicon(client):
     rule = client.post("/api/lexicon", json={"pattern": "Tobias", "replacement": "Toe-bye-us"}).json()

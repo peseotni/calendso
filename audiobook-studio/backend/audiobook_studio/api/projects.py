@@ -21,7 +21,7 @@ from ..ingest.base import count_words
 from ..jobs.runner import runner
 from ..library.covers import CoverError, delete_cover, fetch_cover, save_cover
 from ..library.service import data_relative
-from ..models import METADATA_FIELDS, Book, Chapter, LexiconRule, Project, utcnow
+from ..models import METADATA_FIELDS, Book, Chapter, Job, LexiconRule, Project, utcnow
 from ..schemas import (
     ChapterBulk,
     ChapterDetail,
@@ -178,6 +178,9 @@ def delete_project(project_id: int, delete_book: bool = False, session: Session 
             delete_book_files(book)
             session.delete(book)
     session.query(LexiconRule).filter(LexiconRule.project_id == project.id).delete()
+    session.query(Job).filter(Job.project_id == project.id, Job.status.notin_(("queued", "running"))).delete(
+        synchronize_session=False
+    )
     session.delete(project)
     session.commit()
     shutil.rmtree(studio.project_dir(project_id), ignore_errors=True)
@@ -330,7 +333,8 @@ def preview_project(project_id: int, body: PreviewRequest, session: Session = De
     text = body.text
     title = ""
     if not text:
-        chapter = next((c for c in project.chapters if c.include and c.word_count > 20), None)
+        included = [c for c in project.chapters if c.include and c.word_count]
+        chapter = next((c for c in included if c.word_count > 20), included[0] if included else None)
         if chapter is None:
             raise HTTPException(400, "There is no text to preview.")
         text, title = chapter.text, chapter.title
