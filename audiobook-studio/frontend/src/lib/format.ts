@@ -58,3 +58,14 @@ export const FORMAT_LABELS: Record<string, string> = {
   mp3_single: "Single MP3",
   opus: "Opus per chapter",
 };
+
+const ENGINE_IDS = ["kokoro", "piper", "espeak", "openai", "edge"];
+
+/** Split a stored chapter voice ("kokoro:af_bella:0.6+am_adam:0.4") into engine and voice. */
+export function splitVoiceRef(ref: string, fallbackEngine: string): { engine: string; voice: string } {
+  const index = ref.indexOf(":");
+  if (index > 0 && ENGINE_IDS.includes(ref.slice(0, index))) {
+    return { engine: ref.slice(0, index), voice: ref.slice(index + 1) };
+  }
+  return { engine: fallbackEngine, voice: ref };
+}

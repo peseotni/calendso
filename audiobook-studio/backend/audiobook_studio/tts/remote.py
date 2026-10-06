@@ -141,14 +141,17 @@ class EdgeEngine(TTSEngine):
     def list_voices(self) -> list[Voice]:
         if not self.enabled() or not self.available()[0]:
             return []
-        if self._voices is not None and time.time() - self._voices_time < 6 * 3600:
+        # Successful lists are cached for 6 hours, failures for 5 minutes so an
+        # offline server does not stall every request.
+        max_age = 6 * 3600 if self._voices else 300
+        if self._voices is not None and time.time() - self._voices_time < max_age:
             return self._voices
         cache = self.ctx.models_dir / "edge-voices.json"
         raw = None
         try:
             import edge_tts
 
-            raw = _run_async(edge_tts.list_voices())
+            raw = _run_async(asyncio.wait_for(edge_tts.list_voices(), timeout=10))
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_text(json.dumps(raw), encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
@@ -173,9 +176,8 @@ class EdgeEngine(TTSEngine):
                 description=", ".join(item.get("VoiceTag", {}).get("VoicePersonalities", [])),
                 recommended="Multilingual" in short,
             ))
-        if voices:
-            self._voices = voices
-            self._voices_time = time.time()
+        self._voices = voices
+        self._voices_time = time.time()
         return voices
 
     def language_for_voice(self, voice: str) -> str:

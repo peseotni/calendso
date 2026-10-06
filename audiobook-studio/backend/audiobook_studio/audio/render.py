@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,12 +30,15 @@ class VoiceChoice:
     voice: str
 
 
-def parse_voice_ref(ref: str | None, default_engine: str) -> VoiceChoice | None:
+KNOWN_ENGINES = ("kokoro", "piper", "espeak", "openai", "edge")
+
+
+def parse_voice_ref(ref: str | None, default_engine: str, engines: Iterable[str] = KNOWN_ENGINES) -> VoiceChoice | None:
     """'piper:en_US-amy-medium' -> VoiceChoice; bare ids use the default engine."""
     if not ref:
         return None
     engine, sep, voice = ref.partition(":")
-    if sep and engine in ("kokoro", "piper", "espeak", "openai", "edge"):
+    if sep and engine in set(engines):
         return VoiceChoice(engine, voice)
     return VoiceChoice(default_engine, ref)
 
@@ -68,7 +71,7 @@ def plan_segments(
     lexicon: Lexicon,
     voice_override: str | None = None,
 ) -> tuple[list[Segment], dict[str, VoiceChoice], str]:
-    narrator = parse_voice_ref(voice_override, settings.engine) or VoiceChoice(settings.engine, settings.voice)
+    narrator = parse_voice_ref(voice_override, settings.engine, registry.engines) or VoiceChoice(settings.engine, settings.voice)
     roles = {"narrator": narrator}
     dialogue = None
     if settings.dialogue_enabled and settings.dialogue_voice:

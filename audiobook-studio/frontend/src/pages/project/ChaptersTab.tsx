@@ -6,6 +6,7 @@ import {
   Combine,
   Headphones,
   Loader2,
+  Mic2,
   MoreHorizontal,
   Pencil,
   Play,
@@ -18,10 +19,11 @@ import { useState } from "react";
 import { useFeedback } from "../../components/feedback";
 import { Badge, Button, Card, Field, IconButton, Menu, MenuItem, Modal, cn } from "../../components/ui";
 import { api } from "../../lib/api";
-import { formatDuration, formatNumber } from "../../lib/format";
+import { formatDuration, formatNumber, splitVoiceRef } from "../../lib/format";
 import { usePreviewPlayer } from "../../lib/hooks";
 import type { Chapter, ProjectDetail } from "../../lib/types";
 import { ChapterEditor } from "./ChapterEditor";
+import { ChapterVoiceModal } from "./ChapterVoiceModal";
 
 function AudioState({ chapter }: { chapter: Chapter }) {
   if (chapter.status === "rendering") return <Badge color="brand" icon={<Loader2 className="size-3 animate-spin" />}>Narrating</Badge>;
@@ -41,6 +43,7 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
   const [adding, setAdding] = useState(false);
   const [newChapter, setNewChapter] = useState({ title: "", text: "" });
   const [playingRendered, setPlayingRendered] = useState<number | null>(null);
+  const [voiceFor, setVoiceFor] = useState<number[]>([]);
   const locked = project.status === "rendering" || project.status === "importing";
   const chapters = project.chapters;
   const included = chapters.filter((c) => c.include);
@@ -50,8 +53,10 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
       const result = await action();
       if (message) feedback.success(message);
       onChange(result && typeof result === "object" && "chapters" in (result as object) ? (result as ProjectDetail) : undefined);
+      return true;
     } catch (error) {
       feedback.error(error);
+      return false;
     }
   };
 
@@ -100,6 +105,9 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
             </Button>
             <Button size="sm" onClick={() => void run(() => api.bulkChapters(project.id, { chapter_ids: selectedIds, include: false }))}>
               Skip
+            </Button>
+            <Button size="sm" icon={<Mic2 className="size-4" />} onClick={() => setVoiceFor(selectedIds)}>
+              Voice…
             </Button>
             <Button
               size="sm"
@@ -155,7 +163,13 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
               <div className={cn("flex items-center gap-2", !chapter.include && "opacity-50")}>
                 <span className="truncate text-sm font-medium">{chapter.title}</span>
                 {chapter.kind !== "chapter" && <Badge>{chapter.kind === "front" ? "Front matter" : "Back matter"}</Badge>}
-                {chapter.voice && <Badge color="blue">{chapter.voice.split(":").pop()}</Badge>}
+                {chapter.voice && (
+                  <Badge color="blue" className="max-w-40 truncate" icon={<Mic2 className="size-3 shrink-0" />}>
+                    <span className="truncate" title={chapter.voice}>
+                      {splitVoiceRef(chapter.voice, project.settings.engine).voice}
+                    </span>
+                  </Badge>
+                )}
               </div>
               <div className={cn("truncate text-xs text-zinc-500 dark:text-zinc-400", !chapter.include && "opacity-50")}>
                 {chapter.preview}
@@ -208,6 +222,9 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
                     <MenuItem icon={<Pencil />} onClick={() => (setEditing(chapter.id), close())}>
                       Edit text
                     </MenuItem>
+                    <MenuItem icon={<Mic2 />} onClick={() => (setVoiceFor([chapter.id]), close())}>
+                      {chapter.voice ? "Change chapter voice" : "Use a different voice"}
+                    </MenuItem>
                     <MenuItem icon={<ArrowUp />} disabled={index === 0 || locked} onClick={() => (move(index, -1), close())}>
                       Move up
                     </MenuItem>
@@ -250,6 +267,14 @@ export function ChaptersTab({ project, onChange }: { project: ProjectDetail; onC
       </div>
 
       <ChapterEditor project={project} chapterId={editing} onClose={() => setEditing(null)} onSaved={onChange} />
+      <ChapterVoiceModal
+        project={project}
+        chapterIds={voiceFor}
+        onClose={() => setVoiceFor([])}
+        onSave={(voice) =>
+          run(() => api.bulkChapters(project.id, { chapter_ids: voiceFor, voice }), voice ? "Chapter voice updated" : "Using the project voice again")
+        }
+      />
 
       <Modal
         open={adding}

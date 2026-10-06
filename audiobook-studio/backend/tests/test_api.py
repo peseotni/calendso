@@ -120,6 +120,24 @@ def test_previews(client, rendered_book):
     assert response.status_code == 400
 
 
+def test_chapter_voice_override(client, rendered_book, run_jobs):
+    project, _ = rendered_book
+    chapter = next(c for c in project["chapters"] if c["include"])
+    detail = client.post(f"/api/projects/{project['id']}/chapters/bulk",
+                         json={"chapter_ids": [chapter["id"]], "voice": "tone:boop"}).json()
+    changed = next(c for c in detail["chapters"] if c["id"] == chapter["id"])
+    assert changed["voice"] == "tone:boop" and changed["audio_state"] == "stale"
+    assert client.post(f"/api/projects/{project['id']}/chapters/{chapter['id']}/preview", json={}).status_code == 200
+    job = client.post(f"/api/projects/{project['id']}/render").json()
+    run_jobs()
+    job = client.get(f"/api/jobs/{job['id']}").json()
+    assert job["status"] == "done" and job["result"]["rendered_chapters"] == 1
+    # back to the project voice
+    client.post(f"/api/projects/{project['id']}/chapters/bulk", json={"chapter_ids": [chapter["id"]], "voice": ""})
+    client.post(f"/api/projects/{project['id']}/render")
+    run_jobs()
+
+
 def test_render_creates_library_book(client, rendered_book, data_dir):
     project, book = rendered_book
     assert project["status"] == "done"

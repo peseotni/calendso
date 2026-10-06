@@ -117,7 +117,7 @@ def render(ctx: JobContext) -> dict:
         if settings.dialogue_enabled and settings.dialogue_voice:
             engines_needed.add(settings.dialogue_engine or settings.engine)
         for chapter in chapters:
-            choice = parse_voice_ref(chapter["voice"], settings.engine)
+            choice = parse_voice_ref(chapter["voice"], settings.engine, registry.engines)
             if choice:
                 engines_needed.add(choice.engine)
         for engine_id in engines_needed:

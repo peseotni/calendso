@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from .. import studio
 from ..audio.codec import encode_preview
+from ..audio.render import parse_voice_ref
 from ..audio.render import preview as render_preview
 from ..config import get_config
 from ..db import get_db
@@ -490,9 +491,9 @@ def preview_chapter(project_id: int, chapter_id: int, body: PreviewRequest, sess
     chapter = _chapter(session, project_id, chapter_id)
     settings = render_settings(project)
     if chapter.voice:
-        engine, sep, voice = chapter.voice.partition(":")
-        if sep:
-            settings.engine, settings.voice = engine, voice
+        choice = parse_voice_ref(chapter.voice, settings.engine, get_registry().engines)
+        if choice is not None:
+            settings.engine, settings.voice = choice.engine, choice.voice
     text = body.text or chapter.text
     try:
         audio, rate = render_preview(text, settings, get_registry(), studio.lexicon_for(session, project.id),

@@ -32,6 +32,7 @@ VARIANTS: dict[str, dict[str, Any]] = {
         "size_mb": 88,
         "urls": [
             f"{_GH}/model-files-v1.0/kokoro-v1.0.int8.onnx",
+            f"{_GH}/model-files-v1.1/kokoro-v1.0.int8.onnx",
             f"{_HF}/onnx/model_quantized.onnx",
         ],
     },
