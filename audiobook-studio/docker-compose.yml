@@ -1,0 +1,26 @@
+# Audiobook Studio – docker compose up -d   →   http://localhost:8000
+services:
+  audiobook-studio:
+    build: .
+    image: audiobook-studio:latest
+    container_name: audiobook-studio
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Run as your user so files in the volumes belong to you (see `id`).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Etc/UTC"
+      # Optional: protect the web interface with a password.
+      # STUDIO_PASSWORD: "change-me"
+      # Parallel narration jobs (each uses all CPU cores, 1 is usually best).
+      # STUDIO_RENDER_WORKERS: "1"
+    volumes:
+      # Database, projects, downloaded voice models and the inbox (watch folder).
+      - ./data:/data
+      # Finished and imported audiobooks, organised by author/series/title.
+      # Point this at the folder used by Audiobookshelf, Plex or Jellyfin if you like.
+      - ./audiobooks:/audiobooks
+      # Optional: a separate watch folder for new ebooks.
+      # - /path/to/ebook-inbox:/data/inbox

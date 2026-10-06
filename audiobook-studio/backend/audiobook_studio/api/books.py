@@ -20,7 +20,7 @@ from ..jobs.runner import runner
 from ..library import service as library
 from ..library.covers import CoverError, fetch_cover, thumb_path
 from ..library.feeds import MIME
-from ..library.paths import TEMPLATE_FIELDS, TEMPLATE_PRESETS, render_template, resolve_path, template_fields
+from ..library.paths import TEMPLATE_FIELDS, TEMPLATE_PRESETS, author_sort, render_template, resolve_path, template_fields
 from ..models import METADATA_FIELDS, Book, Collection, collection_books, utcnow
 from ..schemas import BookOut, BookUpdate, BulkBookUpdate, CoverUrl, JobOut, OrganizeRequest, ProgressUpdate, ScanRequest
 from .common import book_out, get_or_404, job_out
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api", tags=["library"])
 PATH_FIELDS = {"author", "title", "series", "series_index", "genre", "year", "narrator", "language", "publisher", "subtitle"}
 SORTS = {
     "title": lambda b: (b.title or "").lower(),
-    "author": lambda b: ((b.author or "~").lower(), (b.series or "").lower(), _index(b.series_index), (b.title or "").lower()),
+    "author": lambda b: ((author_sort(b.author) or "~").lower(), (b.series or "").lower(), _index(b.series_index), (b.title or "").lower()),
     "added": lambda b: b.added_at,
     "duration": lambda b: b.duration,
     "year": lambda b: b.year or "0",

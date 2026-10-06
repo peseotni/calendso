@@ -77,6 +77,13 @@ function groupKeys(book: Book, group: string, collections: Collection[]): string
   }
 }
 
+/** "Ursula K. Le Guin" -> "Guin Ursula K. Le" so authors sort by surname. */
+function surnameFirst(name: string): string {
+  const first = name.split(/\s*(?:,|&| and )\s*/)[0].trim();
+  const parts = first.split(/\s+/);
+  return parts.length > 1 ? `${parts[parts.length - 1]} ${parts.slice(0, -1).join(" ")}` : first;
+}
+
 function filterValueForGroup(group: string, key: string): [string, string] | null {
   if (["author", "series", "genre", "narrator", "year"].includes(group) && !/^(Unknown|Standalone|No )/.test(key)) return [group, key];
   return null;
@@ -145,7 +152,10 @@ export default function LibraryPage() {
         map.set(key, [...(map.get(key) ?? []), book]);
       }
     }
-    return [...map.entries()].sort(([a], [b]) => (group === "year" ? b.localeCompare(a) : a.localeCompare(b)));
+    const byIndex = (a: Book, b: Book) => (parseFloat(a.series_index) || 9999) - (parseFloat(b.series_index) || 9999);
+    if (group === "series") for (const items of map.values()) items.sort(byIndex);
+    const sortKey = (key: string) => (group === "author" || group === "narrator" ? surnameFirst(key) : key);
+    return [...map.entries()].sort(([a], [b]) => (group === "year" ? b.localeCompare(a) : sortKey(a).localeCompare(sortKey(b))));
   }, [books.data, group, collections.data]);
 
   const toggleSelected = (id: number) => {

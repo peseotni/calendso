@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, BookOpen, Clock, Download, FolderSync, Headphones, Mic2, Sparkles, Users, Wand2 } from "lucide-react";
+import { ArrowRight, BookOpen, Clock, Download, FolderSync, Headphones, Mic2, Play, Sparkles, Users, Wand2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { BookCard } from "../components/BookCard";
 import { Cover } from "../components/Cover";
@@ -131,7 +131,7 @@ export default function Dashboard() {
       {data.continue_listening.length > 0 && (
         <section className="mb-10">
           <h2 className="mb-4 text-lg font-semibold">Continue listening</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {data.continue_listening.map((book) => (
               <Card key={book.id} className="flex items-center gap-3 p-3">
                 <Link to={`/library/${book.id}`} className="w-16 shrink-0">
@@ -145,9 +145,13 @@ export default function Dashboard() {
                     {formatDuration(Math.max(0, book.duration - book.progress))} left
                   </div>
                 </div>
-                <Button size="sm" variant="subtle" onClick={() => player.play(book)}>
-                  Resume
-                </Button>
+                <button
+                  onClick={() => player.play(book)}
+                  aria-label={`Resume ${book.title}`}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm transition hover:bg-brand-500"
+                >
+                  <Play className="ml-0.5 size-4" fill="currentColor" />
+                </button>
               </Card>
             ))}
           </div>

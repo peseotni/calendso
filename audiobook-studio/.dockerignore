@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.venv
+**/venv
+data
+audiobooks
+backend/tests
+backend/audiobook_studio/static
+*.db
+docs

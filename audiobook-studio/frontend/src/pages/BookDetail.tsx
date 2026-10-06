@@ -154,10 +154,13 @@ export default function BookDetail() {
             {book.language && <span>{languageName(book.language)}</span>}
             {book.genre && (
               <span className="flex flex-wrap gap-1">
-                {book.genre.split(",").map((g) => (
-                  <Link key={g} to={`/library?genre=${encodeURIComponent(g.trim())}`} className="hover:underline">
-                    {g.trim()}
-                  </Link>
+                {book.genre.split(",").map((g, i) => (
+                  <span key={g}>
+                    {i > 0 && ", "}
+                    <Link to={`/library?genre=${encodeURIComponent(g.trim())}`} className="hover:underline">
+                      {g.trim()}
+                    </Link>
+                  </span>
                 ))}
               </span>
             )}
