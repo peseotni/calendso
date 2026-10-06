@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable
+import threading
+from collections import OrderedDict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 
@@ -36,6 +38,11 @@ def compile_rule(rule: Rule) -> re.Pattern[str]:
         raise LexiconError(f"Invalid pattern {rule.pattern!r}: {exc}") from exc
 
 
+_MATCH_CACHE: OrderedDict[tuple[str, str, str], str] = OrderedDict()
+_MATCH_CACHE_SIZE = 5000
+_MATCH_LOCK = threading.Lock()
+
+
 class Lexicon:
     """Applies rules in order; project rules should come before global ones."""
 
@@ -47,6 +54,33 @@ class Lexicon:
                 self._compiled.append((compile_rule(rule), rule))
             except LexiconError:
                 continue  # invalid rules are reported when saved; skip at render time
+        data = json.dumps([r.__dict__ for r in self.rules], sort_keys=True)
+        self._fingerprint = hashlib.sha1(data.encode()).hexdigest()[:12]
+
+    def fingerprint_for(self, text: str, variant: str = "", expand: Callable[[str], str] | None = None) -> str:
+        """Fingerprint of only the rules that affect ``text``.
+
+        Adding a rule for a name that appears in one chapter must not mark every
+        chapter of the book as changed. ``expand`` may return the text as the
+        rules will see it (after clean-up); results are cached because this runs
+        for every chapter whenever a project is displayed.
+        """
+        if not self._compiled:
+            return "none"
+        key = (self._fingerprint, variant, hashlib.sha1(text.encode("utf-8")).hexdigest())
+        with _MATCH_LOCK:
+            cached = _MATCH_CACHE.get(key)
+            if cached is not None:
+                _MATCH_CACHE.move_to_end(key)
+                return cached
+        haystack = text + ("\n\n" + expand(text) if expand else "")
+        used = [rule.__dict__ for pattern, rule in self._compiled if pattern.search(haystack)]
+        result = hashlib.sha1(json.dumps(used, sort_keys=True).encode()).hexdigest()[:12] if used else "none"
+        with _MATCH_LOCK:
+            _MATCH_CACHE[key] = result
+            while len(_MATCH_CACHE) > _MATCH_CACHE_SIZE:
+                _MATCH_CACHE.popitem(last=False)
+        return result
 
     def apply(self, text: str) -> str:
         for pattern, rule in self._compiled:
@@ -64,8 +98,7 @@ class Lexicon:
         return text
 
     def fingerprint(self) -> str:
-        data = json.dumps([r.__dict__ for r in self.rules], sort_keys=True)
-        return hashlib.sha1(data.encode()).hexdigest()[:12]
+        return self._fingerprint
 
 
 def _match_case(original: str, replacement: str) -> str:

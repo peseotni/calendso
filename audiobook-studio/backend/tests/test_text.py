@@ -88,3 +88,19 @@ def test_path_templates():
     assert render_template(template, {"author": "", "title": "Solo"}) == "Unknown Author/Solo"
     assert render_template("{author}/[Book {series_index:02} - ]{title}", {**fields}) == "Ursula K. Le Guin/Book 01 - A Wizard of Earthsea"
     assert sanitize_component('AC/DC: "Live"?') == "AC DC Live"
+
+
+def test_chapter_fingerprint_only_depends_on_matching_rules():
+    from audiobook_studio.audio.render import chapter_fingerprint
+    from audiobook_studio.settings_store import RenderSettings
+
+    settings = RenderSettings()
+    before = Lexicon([])
+    after = Lexicon([Rule("Tobias", "Toe-bye-us")])
+    with_name = ("One", "Tobias waved.")
+    without_name = ("Two", "Mara smiled.")
+    assert chapter_fingerprint(*with_name, settings, None, before) != chapter_fingerprint(*with_name, settings, None, after)
+    assert chapter_fingerprint(*without_name, settings, None, before) == chapter_fingerprint(*without_name, settings, None, after)
+    # rules are matched against the cleaned text as well ("Mr." becomes "Mister")
+    mister = Lexicon([Rule("Mister", "Mr")])
+    assert chapter_fingerprint("Three", "Mr. Hale.", settings, None, before) != chapter_fingerprint("Three", "Mr. Hale.", settings, None, mister)

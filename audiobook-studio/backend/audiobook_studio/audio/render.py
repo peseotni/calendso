@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from ..settings_store import RenderSettings
+from ..text.cleanup import clean_for_speech
 from ..text.lexicon import Lexicon
 from ..text.segment import Segment, SegmentOptions, build_segments, heading_in_text, speakable_heading
 from ..tts import EngineRegistry, TTSError
@@ -47,7 +48,15 @@ def chapter_fingerprint(
                  "dialogue_voice", "announce_chapters", "sentence_pause", "paragraph_pause",
                  "section_pause", "chapter_pause", "cleanup"}
     )
-    payload = json.dumps([title, text, relevant, voice_override, lexicon.fingerprint()], sort_keys=True)
+    language = settings.language or "en"
+    cleanup = settings.cleanup
+    # Only pronunciation rules that occur in this chapter change its audio.
+    rules = lexicon.fingerprint_for(
+        f"{title}\n\n{text}",
+        variant=cleanup.model_dump_json() + language,
+        expand=lambda value: clean_for_speech(value, cleanup, language),
+    )
+    payload = json.dumps([title, text, relevant, voice_override, rules], sort_keys=True)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 

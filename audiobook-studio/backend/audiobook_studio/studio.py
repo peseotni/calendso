@@ -43,7 +43,7 @@ def voice_label(engine_id: str, voice_id: str) -> str:
             name = " + ".join(p.split(":", 1)[0].split("_", 1)[-1].title() for p in voice_id.split("+"))
         else:
             name = next((v.name for v in engine.list_voices() if v.id == base), voice_id)
-        return f"{name} ({engine.name})"
+        return f"{engine.name} – {name}"
     except TTSError:
         return voice_id
 

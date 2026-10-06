@@ -1,0 +1,9 @@
+{
+  "name": "Audiobook Studio",
+  "short_name": "Audiobooks",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#18181b",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
